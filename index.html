@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Handwritten Digit Recognition</title>
+    <link rel="stylesheet" href="../static/bootstrap.min.css">
+    <script src="../static/jquery-3.3.1.min.js"></script>
+    <script src="../static/bootstrap.min.js"></script>
+    <script src="../static/paper-full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { background: #1a1a2e; color: white; }
+        canvas#my_canvas { border: 2px solid #555; display: block; margin: auto; }
+        .card-dark { background: #16213e; border-radius: 12px; padding: 20px; margin: 10px; }
+        .badge-cpu  { background: #f39c12; color: black; padding: 10px 20px; border-radius: 8px; font-size: 2rem; }
+        .badge-fpga { background: #27ae60; color: white; padding: 10px 20px; border-radius: 8px; font-size: 2rem; }
+        h3, h5, p, b { color: white; }
+    </style>
+    <script type="text/javascript">
+        paper.install(window);
+        window.onload = function() {
+            var canvas = document.getElementById('my_canvas');
+            canvas.style.backgroundColor = 'black';
+            paper.setup(canvas);
+            var path;
+            var tool = new Tool();
+            tool.onMouseDown = function(event) {
+                path = new Path();
+                path.strokeColor = 'white';
+                path.strokeWidth = 15;
+                path.strokeCap = 'round';
+                path.strokeJoin = 'round';
+            }
+            tool.onMouseDrag = function(event) { path.add(event.point); }
+
+            // Chart setup
+            var ctx = document.getElementById('timingChart').getContext('2d');
+            var timingChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: [],
+                    datasets: [
+                        { label: 'CPU Time (ms)',  data: [], backgroundColor: '#f39c12' },
+                        { label: 'FPGA Time (ms)', data: [], backgroundColor: '#27ae60' }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { labels: { color: 'white', font: { size: 14 } } },
+                        title: { display: true, text: 'Inference Time: CPU vs FPGA', color: 'white', font: { size: 16 } }
+                    },
+                    scales: {
+                        x: { ticks: { color: 'white' }, grid: { color: '#333' } },
+                        y: {
+                            ticks: { color: 'white' },
+                            grid: { color: '#333' },
+                            title: { display: true, text: 'Time (ms)', color: 'white' }
+                        }
+                    }
+                }
+            });
+
+            document.getElementById('predict').onclick = function() {
+                $("#predict").text("Running...").prop("disabled", true);
+                var url = { base64str: canvas.toDataURL() }
+                $.post(window.location.origin, JSON.stringify(url), function(response) {
+                    $("#predict").text("Predict").prop("disabled", false);
+
+                    // Update predictions
+                    $("#cpu_result").text(response.prediction);
+                    $("#fpga_result").text(response.fpga_prediction !== null ? response.fpga_prediction : "N/A");
+                    $("#cpu_time").text(response.cpu_time_ms + " ms");
+                    $("#fpga_time").text(response.fpga_time_ms !== null ? response.fpga_time_ms + " ms" : "N/A");
+
+                    // Speedup
+                    if (response.fpga_time_ms && response.cpu_time_ms) {
+                        var speedup = (response.cpu_time_ms / response.fpga_time_ms).toFixed(2);
+                        $("#speedup").text("FPGA is " + speedup + "x faster than CPU");
+                    }
+
+                    // Update chart
+                    var history = response.timing_history;
+                    timingChart.data.labels = ["Current Prediction"];
+                    timingChart.data.datasets[0].data = [response.cpu_time_ms];
+                    timingChart.data.datasets[1].data = [response.fpga_time_ms];
+                    timingChart.update();
+                });
+            }
+
+            document.getElementById('clear').onclick = function() {
+                paper.project.activeLayer.removeChildren();
+                paper.view.draw();
+            }
+        }
+    </script>
+</head>
+<body>
+<div class="container-fluid mt-3">
+    <h3 class="text-center mb-3">🧠 Handwritten Digit Recognition — CPU vs FPGA</h3>
+    <div class="row">
+
+        <!-- Canvas -->
+        <div class="col-md-3">
+            <div class="card-dark text-center">
+                <h5>✏️ Draw a digit:</h5>
+                <canvas id="my_canvas" width="280" height="280"></canvas>
+                <br><br>
+                <div class="btn-group">
+                    <button class="btn btn-warning btn-lg" id="predict"><b>Predict</b></button>
+                    <button class="btn btn-secondary btn-lg" id="clear">Clear</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Results -->
+        <div class="col-md-3">
+            <div class="card-dark text-center mb-3">
+                <h5>🟠 CPU Prediction</h5>
+                <div class="badge-cpu" id="cpu_result">-</div>
+                <p class="mt-3">Time: <b id="cpu_time">-</b></p>
+            </div>
+            <div class="card-dark text-center mb-3">
+                <h5>🟢 FPGA Prediction</h5>
+                <div class="badge-fpga" id="fpga_result">-</div>
+                <p class="mt-3">Time: <b id="fpga_time">-</b></p>
+            </div>
+            <div class="card-dark text-center">
+                <h5>⚡ Speedup</h5>
+                <p id="speedup">-</p>
+            </div>
+        </div>
+
+        <!-- Chart -->
+        <div class="col-md-6">
+            <div class="card-dark">
+                <canvas id="timingChart" height="300"></canvas>
+            </div>
+        </div>
+
+    </div>
+</div>
+</body>
+</html>
+EOF
