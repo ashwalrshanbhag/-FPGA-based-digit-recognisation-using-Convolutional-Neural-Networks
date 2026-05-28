@@ -1,19 +1,4 @@
-/*------------------------------------------------------------------------
- *
- *  Copyright (c) 2021 by Bo Young Kang, All rights reserved.
- *
- *  File name  : conv2_calc_1.v
- *  Written by : Kang, Bo Young, weenslab
- *  Written on : Oct 14, 2021
- *  Version    : 22
- *  Design     : 2nd Convolution Layer for CNN MNIST dataset
- *               Convolution Sum Calculation
- *
- *------------------------------------------------------------------------*/
 
-/*-------------------------------------------------------------------
- *  Module: conv2_calc_1
- *------------------------------------------------------------------*/
 
 module conv2_calc
     #(
