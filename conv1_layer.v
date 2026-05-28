@@ -1,18 +1,4 @@
-/*------------------------------------------------------------------------
- *
- *  Copyright (c) 2021 by Bo Young Kang, All rights reserved.
- *
- *  File name  : conv1_layer.v
- *  Written by : Kang, Bo Young, weenslab
- *  Written on : Sep 30, 2021
- *  Version    : 22
- *  Design     : 1st Convolution Layer for CNN MNIST dataset
- *
- *------------------------------------------------------------------------*/
 
-/*-------------------------------------------------------------------
- *  Module: conv1_layer
- *------------------------------------------------------------------*/
 
 module conv1_layer
     (
