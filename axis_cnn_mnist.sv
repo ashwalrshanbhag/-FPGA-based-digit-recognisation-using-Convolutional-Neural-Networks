@@ -3,12 +3,12 @@
 module axis_cnn_mnist (
     input  logic       aclk,
     input  logic       aresetn,
-    output logic       s_axis_tready,
-    input  logic [7:0] s_axis_tdata,
-    input  logic       s_axis_tvalid,
-    input  logic       m_axis_tready,
-    output logic [7:0] m_axis_tdata,
-    output logic       m_axis_tvalid,
+    output logic       s_axis_tready, // Input Ready: Tells the sender "I am ready for pixels!"
+    input  logic [7:0] s_axis_tdata, // Input Data: The incoming 8-bit pixel value.
+    input  logic       s_axis_tvalid, // Input Valid: Sender says "The pixel on tdata is real!"
+    input  logic       m_axis_tready, // Output Ready: Next chip says "Ready for your AI prediction!"
+    output logic [7:0] m_axis_tdata, // Output Data: The final 8-bit AI prediction (0-9).
+    output logic       m_axis_tvalid,// Output Valid: We say "Our AI prediction is ready!"
     output logic       m_axis_tlast
 );
 
