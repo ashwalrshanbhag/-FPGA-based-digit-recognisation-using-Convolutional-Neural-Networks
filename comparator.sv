@@ -11,9 +11,9 @@ module comparator
     );
 
     // 10-slot reservoir buffer to store the input features
-    reg signed [11:0] buffer [0:9];
-    reg [3:0]  buf_idx;
-    reg [2:0]  delay_cnt;
+    reg signed [11:0] buffer [0:9];    // 10 places 
+    reg [3:0]  buf_idx;  // log10 , counts from 0 to 10 
+    reg [2:0]  delay_cnt; 
     reg        state;
 
     // Internal wires for the combinational comparison layers
@@ -73,7 +73,7 @@ module comparator
                 
                 // Since the tree is combinational, it settles instantly. 
                 // We pulse valid_out and register the decision on the next clock cycle.
-                if (delay_cnt == 3'd1) begin
+                if (delay_cnt == 3'd1) begin     
                     valid_out <= 1'b1;
                     state     <= 1'b0; // Reset execution flag
                     delay_cnt <= 3'd0;
