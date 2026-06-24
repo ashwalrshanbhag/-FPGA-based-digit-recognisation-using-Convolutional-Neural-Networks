@@ -23,9 +23,9 @@ module fully_connected
     reg [$clog2(OUTPUT_NUM)-1:0]  out_idx;  //Counts 0 to 9
 
     // Memory Blocks
-    reg signed [13:0]             buffer [0:INPUT_NUM-1];
-    reg signed [DATA_BITS-1:0]    weight [0:INPUT_NUM*OUTPUT_NUM-1];
-    reg signed [DATA_BITS-1:0]    bias   [0:OUTPUT_NUM-1];
+    reg signed [13:0]             buffer [0:INPUT_NUM-1];  //buffer holds the 48 image pixels (using 14-bit expanded slots).
+    reg signed [DATA_BITS-1:0]    weight [0:INPUT_NUM*OUTPUT_NUM-1]; //weight holds all 480 individual parameters ($48 \times 10$).
+    reg signed [DATA_BITS-1:0]    bias   [0:OUTPUT_NUM-1];  //bias holds 10 balancing values (one per class).
 
     // Pipeline Stage Arrays (Safe extended word sizes to completely eliminate truncation overflows)
     reg signed [21:0] stage1_mult [0:23]; 
@@ -37,7 +37,7 @@ module fully_connected
 
     // Shift register chain to match pipeline execution delay
     reg [5:0] valid_pipe; 
-    reg       calc_trigger;
+    reg       calc_trigger; // 1 when the 48*1 buffer is  full 
 
     // Pre-load parameters from weight files
     initial begin
@@ -66,9 +66,9 @@ module fully_connected
             
             if (!state) begin
                 if (valid_in) begin
-                    buffer[buf_idx]                   <= data1;
-                    buffer[INPUT_WIDTH + buf_idx]     <= data2;  
-                    buffer[INPUT_WIDTH * 2 + buf_idx] <= data3;
+                    buffer[buf_idx]                   <= data1; //brings in the 16 pixels of Channel 0, one by one.
+                    buffer[INPUT_WIDTH + buf_idx]     <= data2;  //brings in the 16 pixels of Channel 1, one by one.     
+                    buffer[INPUT_WIDTH * 2 + buf_idx] <= data3; //brings in the 16 pixels of Channel 2, one by one.
                     
                     if (buf_idx == INPUT_WIDTH - 1) begin
                         buf_idx      <= 0;
