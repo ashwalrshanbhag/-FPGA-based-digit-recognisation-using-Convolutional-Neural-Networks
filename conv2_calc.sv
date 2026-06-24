@@ -9,12 +9,12 @@ module conv2_calc
     (
         input  wire                 clk,
         input  wire                 rst_n,
-        input  wire                 valid_out_buf,
+        input  wire                 valid_out_buf, // high if pixels are coming 
         
         // Bundled Multi-Channel Ports: 3 channels, each delivering 25 pixels simultaneously
-        input  wire signed [11:0]   data_in [0:2][0:24], 
+        input  wire signed [11:0]   data_in [0:2][0:24],  // output of relu is 144*3  =432 pixels . data_in =5*5 matrix 
         
-        output wire        [13:0]   conv_out_calc,
+        output wire        [13:0]   conv_out_calc,// kept 14 , after 12bit * 8 bit mul and  then addition operation 75 times 
         output wire                 valid_out_calc
     );
 
@@ -67,7 +67,7 @@ module conv2_calc
     reg signed [19:0] stage3_sums [0:2][0:2];
     reg signed [19:0] stage4_final [0:2];
 
-    always @(posedge clk) begin
+    always @(posedge clk) begin    
         if (~rst_n) begin
             stage2_sums  <= '{default: '{default: 0}};
             stage3_sums  <= '{default: '{default: 0}};
