@@ -12,22 +12,22 @@ module maxpool_relu
         input  wire                         rst_n,
         input  wire                         valid_in,  // High when valid pixel data arrives
         
-        // Input Channels: Pack 3 separate parallel streams into a 2D array [0:2]
+        // Input Channels: Pack 3 separate parallel streams into a 2D array [0:2] , cent by the conv layer 
         input  wire signed [CONV_BIT-1:0]   conv_out [0:2],  
         // Output Channels: 3 parallel activated streams after Pooling + ReLU
-        output reg         [CONV_BIT-1:0]   max_value [0:2],
+        output reg         [CONV_BIT-1:0]   max_value [0:2], 
         output reg                          valid_out_relu  // Strobe indicating valid output data
     );
 
-    // 2D Line Buffer: 3 channels by HALF_WIDTH elements
+    // 2D Line Buffer: 3 channels by HALF_WIDTH elements , for comparision 
     reg signed [CONV_BIT-1:0] row_buffer [0:2][0:HALF_WIDTH-1];
 
-    reg [HALF_WIDTH_BIT-1:0] pcount;
+    reg [HALF_WIDTH_BIT-1:0] pcount;  // selecting 2*2 till end of the  row of the 2*2 pooling windows.
     reg                      state; // 0: Top Row, 1: Bottom Row
-    reg                      flag;  // 0: Left Column, 1: Right Column
+    reg                      flag;  // 0: Left Column, 1: Right Column  of 2*2 
 
     // Pre-calculated comparison winners for clean indexing
-    logic signed [CONV_BIT-1:0] current_max [0:2];
+    logic signed [CONV_BIT-1:0] current_max [0:2];// temp max of 2*2 
 
     always_ff @(posedge clk) begin
         if (~rst_n) begin
@@ -39,11 +39,11 @@ module maxpool_relu
             flag           <= 1'b0;
         end else begin
             if (valid_in) begin
-                flag <= ~flag;
+                flag <= ~flag;  // 1. Toggled flag tracks columns: 0 = Left pixel, 1 = Right pixel
                 
                 // Track Horizontal position and Row States
                 if (flag == 1'b1) begin
-                    pcount <= pcount + 1'b1;
+                    pcount <= pcount + 1'b1; // Advance to next horizontal pooling block slot
                     if (pcount == (HALF_WIDTH-1)) begin
                         state  <= ~state;
                         pcount <= '0;
