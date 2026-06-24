@@ -1,3 +1,10 @@
+/*------------------------------------------------------------------------
+ *
+ * Design     : 1st Convolution Layer for CNN MNIST dataset
+ * Convolution Sum Calculation (Optimized SystemVerilog)
+ *
+ *------------------------------------------------------------------------*/
+
 module conv1_calc
     #(
         parameter WIDTH       = 28, // Input image width
@@ -70,24 +77,19 @@ module conv1_calc
     generate
         for (c = 0; c < CHANNEL_LEN; c = c + 1) begin : gen_channels
 
-            // STAGE 1: Parallel Multiplications & First-Level Pair Additions
+            // STAGE 1: Parallel Multiplications & First-Level Pair Additions (Loop-Unrolled)
             always @(posedge clk or negedge rst_n) begin
                 if (~rst_n) begin
                     stage1_reg[c] <= '{default:0}; // Clears complete array slice instantly
                 end else begin
-                    stage1_reg[c][0]  <= (exp_data[0]  * weight[c][0])  + (exp_data[1]  * weight[c][1]);
-                    stage1_reg[c][1]  <= (exp_data[2]  * weight[c][2])  + (exp_data[3]  * weight[c][3]);
-                    stage1_reg[c][2]  <= (exp_data[4]  * weight[c][4])  + (exp_data[5]  * weight[c][5]);
-                    stage1_reg[c][3]  <= (exp_data[6]  * weight[c][6])  + (exp_data[7]  * weight[c][7]);
-                    stage1_reg[c][4]  <= (exp_data[8]  * weight[c][8])  + (exp_data[9]  * weight[c][9]);
-                    stage1_reg[c][5]  <= (exp_data[10] * weight[c][10]) + (exp_data[11] * weight[c][11]);
-                    stage1_reg[c][6]  <= (exp_data[12] * weight[c][12]) + (exp_data[13] * weight[c][13]);
-                    stage1_reg[c][7]  <= (exp_data[14] * weight[c][14]) + (exp_data[15] * weight[c][15]);
-                    stage1_reg[c][8]  <= (exp_data[16] * weight[c][16]) + (exp_data[17] * weight[c][17]);
-                    stage1_reg[c][9]  <= (exp_data[18] * weight[c][18]) + (exp_data[19] * weight[c][19]);
-                    stage1_reg[c][10] <= (exp_data[20] * weight[c][20]) + (exp_data[21] * weight[c][21]);
-                    stage1_reg[c][11] <= (exp_data[22] * weight[c][22]) + (exp_data[23] * weight[c][23]);
-                    stage1_reg[c][12] <= (exp_data[24] * weight[c][24]); // 25th element has no pair, passes through
+                    // Automatically unroll the first 12 pairs (Handling inputs 0 to 23)
+                    for (int i = 0; i < 12; i = i + 1) begin
+                        stage1_reg[c][i] <= (exp_data[2*i]   * weight[c][2*i]) + 
+                                            (exp_data[2*i+1] * weight[c][2*i+1]);
+                    end
+                    
+                    // Handle the 25th lone element (Index 24) since it doesn't have a pair
+                    stage1_reg[c][12] <= exp_data[24] * weight[c][24];
                 end
             end
 
