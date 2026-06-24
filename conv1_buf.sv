@@ -10,11 +10,11 @@ module conv1_buf
     (
         input  wire                   clk,
         input  wire                   rst_n,
-        input  wire                   valid_in,
-        input  wire [DATA_BITS-1:0]   data_in,
+        input  wire                   valid_in, // high when pixel is running 
+        input  wire [DATA_BITS-1:0]   data_in, // incoming single pixel stream 
         // Using a clean 2D array packed port instead of 25 standalone outputs
-        output reg  [DATA_BITS-1:0]   data_out [0:FILTER_SIZE*FILTER_SIZE-1],
-        output reg                    valid_out_buf
+        output reg  [DATA_BITS-1:0]   data_out [0:FILTER_SIZE*FILTER_SIZE-1],  
+        output reg                    valid_out_buf  // High when a full 5x5 window is ready
     );
 
     // Size of the ring buffer holding exactly FILTER_SIZE image lines
