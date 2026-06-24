@@ -1,286 +1,109 @@
+`timescale 1ns / 1ps
 
 module conv2_buf
     #(
-        parameter WIDTH = 12,
-                  HEIGHT = 12,
-                  DATA_BITS = 12
+        parameter WIDTH     = 12, // Input map width (scaled down for layer 2)
+                  HEIGHT    = 12, // Input map height
+                  DATA_BITS = 12  // Increased resolution bit-width
     )
     (
-        input  wire                 clk,
-        input  wire                 rst_n,
-        input  wire                 valid_in,
-        input  wire [DATA_BITS-1:0] data_in,
-        output reg  [DATA_BITS-1:0] data_out_0, data_out_1, data_out_2, data_out_3, data_out_4,
-                                    data_out_5, data_out_6, data_out_7, data_out_8, data_out_9,
-                                    data_out_10, data_out_11, data_out_12, data_out_13, data_out_14,
-                                    data_out_15, data_out_16, data_out_17, data_out_18, data_out_19,
-                                    data_out_20, data_out_21, data_out_22, data_out_23, data_out_24,
-        output reg                  valid_out_buf
+        input  wire                   clk,
+        input  wire                   rst_n,
+        input  wire                   valid_in,
+        input  wire [DATA_BITS-1:0]   data_in,
+        
+        // Premium 2D Array Port replacing all 25 individual outputs
+        output reg  [DATA_BITS-1:0]   data_out [0:24], 
+        output reg                    valid_out_buf
     );
 
+    // Fixed architecture parameter for a 5x5 convolution
     localparam FILTER_SIZE = 5;
-    
-    reg [DATA_BITS-1:0] buffer [0:WIDTH*FILTER_SIZE-1];
-    reg [DATA_BITS-1:0] buf_idx;
-    reg [4:0]           w_idx, h_idx;
-    reg [2:0]           buf_flag; // 0 ~ 4
-    reg                 state;
+    localparam BUF_SIZE    = WIDTH * FILTER_SIZE;
 
-    integer i;
+    // Internal Memory Reservoir
+    reg [DATA_BITS-1:0] buffer [0:BUF_SIZE-1];
 
-    always @(posedge clk)
-    begin
-        if (~rst_n)
-        begin
-            for (i=0; i <= WIDTH*FILTER_SIZE-1; i=i+1)
-            begin
-                buffer[i] <= 0;
-            end
-            buf_idx <= 0;
-            w_idx <= 0;
-            h_idx <= 0;
-            buf_flag <= 0;
-            state <= 0;
-            valid_out_buf <= 0;
-            data_out_0 <= 0;
-            data_out_1 <= 0;
-            data_out_2 <= 0;
-            data_out_3 <= 0;
-            data_out_4 <= 0;
-            data_out_5 <= 0;
-            data_out_6 <= 0;
-            data_out_7 <= 0;
-            data_out_8 <= 0;
-            data_out_9 <= 0;
-            data_out_10 <= 0;
-            data_out_11 <= 0;
-            data_out_12 <= 0;
-            data_out_13 <= 0;
-            data_out_14 <= 0;
-            data_out_15 <= 0;
-            data_out_16 <= 0;
-            data_out_17 <= 0;
-            data_out_18 <= 0;
-            data_out_19 <= 0;
-            data_out_20 <= 0;
-            data_out_21 <= 0;
-            data_out_22 <= 0;
-            data_out_23 <= 0;
-            data_out_24 <= 0;
-        end
-        else
-        begin
-            if (valid_in)
-            begin
+    // Smart-sized tracking counters using $clog2
+    reg [$clog2(BUF_SIZE)-1:0] buf_idx;   // Safely scales pointer width for 1D buffer
+    reg [$clog2(WIDTH)-1:0]    w_idx;     // X coordinate tracker
+    reg [$clog2(HEIGHT)-1:0]   h_idx;     // Y coordinate tracker
+    reg [2:0]                  buf_flag;  // Circular row tracker (0 to 4)
+    reg                        state;     // 0: Filling reservoir, 1: Active streaming
+
+    // Loop variables for hardware generation
+    integer r, c;
+
+    // Main Control & Data Stream Sequencer
+    always @(posedge clk) begin
+        if (~rst_n) begin
+            // Complete state resets
+            buf_idx       <= 0;
+            w_idx         <= 0;
+            h_idx         <= 0;
+            buf_flag      <= 0;
+            state         <= 1'b0;
+            valid_out_buf <= 1'b0;
+            
+            // Clean SystemVerilog full array clears
+            buffer        <= '{default: 0};
+            data_out      <= '{default: 0};
+        end 
+        else if (valid_in) begin
+            // 1. Capture streaming data into ring memory
+            buffer[buf_idx] <= data_in;
+
+            // Increment binary pointer address
+            if (buf_idx == BUF_SIZE - 1)
+                buf_idx <= 0;
+            else
                 buf_idx <= buf_idx + 1'b1;
-                if (buf_idx == WIDTH*FILTER_SIZE-1)
-                begin // buffer size = 140 = 28(w) * 5(h)
-                    buf_idx <= 0;
+
+            // 2. Control Machine State Checking
+            if (!state) begin
+                if (buf_idx == BUF_SIZE - 1) begin
+                    state <= 1'b1; // Memory is full, start calculation stream
+                end
+            end 
+            else begin // state == 1
+                w_idx <= w_idx + 1'b1; // Shift sliding window right by 1 column
+
+                // 3. Horizontal & Vertical Edge Tracking Boundary Conditions
+                if (w_idx == WIDTH - FILTER_SIZE + 1) begin
+                    valid_out_buf <= 1'b0; // Turn off output flag: window hits right invalid margin
+                end 
+                else if (w_idx == WIDTH - 1) begin
+                    w_idx <= 0; // Wrap X back to left edge
+                    
+                    // Increment row flag mapping because row wrapped around
+                    if (buf_flag == FILTER_SIZE - 1)
+                        buf_flag <= 0;
+                    else
+                        buf_flag <= buf_flag + 1'b1;
+
+                    // Entire image map frame complete condition
+                    if (h_idx == HEIGHT - FILTER_SIZE) begin
+                        h_idx <= 0;
+                        state <= 1'b0; // Reset state machine to wait for next image frame
+                    end else begin
+                        h_idx <= h_idx + 1'b1;
+                    end
+                end 
+                else if (w_idx == 0) begin
+                    valid_out_buf <= 1'b1; // Back into valid pixel territory
                 end
 
-                buffer[buf_idx] <= data_in; // data input
-
-                // Wait until first 140 input data filled in buffer
-                if (!state)
-                begin
-                    if (buf_idx == WIDTH*FILTER_SIZE-1)
-                    begin
-                        state <= 1;
+                // 4. Mathematical 5x5 Flattening Vector Rotation Loop
+                // Replaces all 150 lines of manual assignment statements
+                for (r = 0; r < FILTER_SIZE; r = r + 1) begin
+                    for (c = 0; c < FILTER_SIZE; c = c + 1) begin
+                        // Map 2D matrix (r,c) to flat 1D vector (0-24) using circular row offset
+                        data_out[r*FILTER_SIZE + c] <= buffer[w_idx + c + (WIDTH * ((r + buf_flag) % FILTER_SIZE))];
                     end
                 end
-                else
-                begin // valid state
-                    w_idx <= w_idx + 1'b1; // move right
 
-                    if (w_idx == WIDTH-FILTER_SIZE+1)
-                    begin
-                        valid_out_buf <= 1'b0;  // unvalid area
-                    end
-                    else if (w_idx == WIDTH-1)
-                    begin
-                        buf_flag <= buf_flag + 1;
-                        if (buf_flag == FILTER_SIZE-1)
-                        begin
-                            buf_flag <= 0;
-                        end
-                        w_idx <= 0;
-
-                        if (h_idx == HEIGHT-FILTER_SIZE)
-                        begin // done 1 input read -> 28 * 28
-                            h_idx <= 0;
-                            state <= 0;
-                        end
-                        h_idx <= h_idx + 1;
-                    end
-                    else if (w_idx == 0)
-                    begin
-                        valid_out_buf <= 1'b1; // start valid area
-                    end
-
-                    // Buffer Selection -> 5 * 5
-                    if (buf_flag == 3'd0)
-                    begin
-                        data_out_0 <= buffer[w_idx];
-                        data_out_1 <= buffer[w_idx + 1];
-                        data_out_2 <= buffer[w_idx + 2];
-                        data_out_3 <= buffer[w_idx + 3];
-                        data_out_4 <= buffer[w_idx + 4];
-
-                        data_out_5 <= buffer[w_idx + WIDTH];
-                        data_out_6 <= buffer[w_idx + 1 + WIDTH];
-                        data_out_7 <= buffer[w_idx + 2 + WIDTH];
-                        data_out_8 <= buffer[w_idx + 3 + WIDTH];
-                        data_out_9 <= buffer[w_idx + 4 + WIDTH];
-
-                        data_out_10 <= buffer[w_idx + WIDTH * 2];
-                        data_out_11 <= buffer[w_idx + 1 + WIDTH * 2];
-                        data_out_12 <= buffer[w_idx + 2 + WIDTH * 2];
-                        data_out_13 <= buffer[w_idx + 3 + WIDTH * 2];
-                        data_out_14 <= buffer[w_idx + 4 + WIDTH * 2];
-
-                        data_out_15 <= buffer[w_idx + WIDTH * 3];
-                        data_out_16 <= buffer[w_idx + 1 + WIDTH * 3];
-                        data_out_17 <= buffer[w_idx + 2 + WIDTH * 3];
-                        data_out_18 <= buffer[w_idx + 3 + WIDTH * 3];
-                        data_out_19 <= buffer[w_idx + 4 + WIDTH * 3];
-
-                        data_out_20 <= buffer[w_idx + WIDTH * 4];
-                        data_out_21 <= buffer[w_idx + 1 + WIDTH * 4];
-                        data_out_22 <= buffer[w_idx + 2 + WIDTH * 4];
-                        data_out_23 <= buffer[w_idx + 3 + WIDTH * 4];
-                        data_out_24 <= buffer[w_idx + 4 + WIDTH * 4];
-                    end
-                    else if (buf_flag == 3'd1)
-                    begin
-                        data_out_0 <= buffer[w_idx + WIDTH];
-                        data_out_1 <= buffer[w_idx + 1 + WIDTH];
-                        data_out_2 <= buffer[w_idx + 2 + WIDTH];
-                        data_out_3 <= buffer[w_idx + 3 + WIDTH];
-                        data_out_4 <= buffer[w_idx + 4 + WIDTH];
-
-                        data_out_5 <= buffer[w_idx + WIDTH * 2];
-                        data_out_6 <= buffer[w_idx + 1 + WIDTH * 2];
-                        data_out_7 <= buffer[w_idx + 2 + WIDTH * 2];
-                        data_out_8 <= buffer[w_idx + 3 + WIDTH * 2];
-                        data_out_9 <= buffer[w_idx + 4 + WIDTH * 2];
-
-                        data_out_10 <= buffer[w_idx + WIDTH * 3];
-                        data_out_11 <= buffer[w_idx + 1 + WIDTH * 3];
-                        data_out_12 <= buffer[w_idx + 2 + WIDTH * 3];
-                        data_out_13 <= buffer[w_idx + 3 + WIDTH * 3];
-                        data_out_14 <= buffer[w_idx + 4 + WIDTH * 3];
-
-                        data_out_15 <= buffer[w_idx + WIDTH * 4];
-                        data_out_16 <= buffer[w_idx + 1 + WIDTH * 4];
-                        data_out_17 <= buffer[w_idx + 2 + WIDTH * 4];
-                        data_out_18 <= buffer[w_idx + 3 + WIDTH * 4];
-                        data_out_19 <= buffer[w_idx + 4 + WIDTH * 4];
-
-                        data_out_20 <= buffer[w_idx];
-                        data_out_21 <= buffer[w_idx + 1];
-                        data_out_22 <= buffer[w_idx + 2];
-                        data_out_23 <= buffer[w_idx + 3];
-                        data_out_24 <= buffer[w_idx + 4];
-                    end
-                    else if (buf_flag == 3'd2)
-                    begin
-                        data_out_0 <= buffer[w_idx + WIDTH * 2];
-                        data_out_1 <= buffer[w_idx + 1 + WIDTH * 2];
-                        data_out_2 <= buffer[w_idx + 2 + WIDTH * 2];
-                        data_out_3 <= buffer[w_idx + 3 + WIDTH * 2];
-                        data_out_4 <= buffer[w_idx + 4 + WIDTH * 2];
-
-                        data_out_5 <= buffer[w_idx + WIDTH * 3];
-                        data_out_6 <= buffer[w_idx + 1 + WIDTH * 3];
-                        data_out_7 <= buffer[w_idx + 2 + WIDTH * 3];
-                        data_out_8 <= buffer[w_idx + 3 + WIDTH * 3];
-                        data_out_9 <= buffer[w_idx + 4 + WIDTH * 3];
-
-                        data_out_10 <= buffer[w_idx + WIDTH * 4];
-                        data_out_11 <= buffer[w_idx + 1 + WIDTH * 4];
-                        data_out_12 <= buffer[w_idx + 2 + WIDTH * 4];
-                        data_out_13 <= buffer[w_idx + 3 + WIDTH * 4];
-                        data_out_14 <= buffer[w_idx + 4 + WIDTH * 4];
-
-                        data_out_15 <= buffer[w_idx];
-                        data_out_16 <= buffer[w_idx + 1];
-                        data_out_17 <= buffer[w_idx + 2];
-                        data_out_18 <= buffer[w_idx + 3];
-                        data_out_19 <= buffer[w_idx + 4];
-
-                        data_out_20 <= buffer[w_idx + WIDTH];
-                        data_out_21 <= buffer[w_idx + 1 + WIDTH];
-                        data_out_22 <= buffer[w_idx + 2 + WIDTH];
-                        data_out_23 <= buffer[w_idx + 3 + WIDTH];
-                        data_out_24 <= buffer[w_idx + 4 + WIDTH];
-                    end
-                    else if (buf_flag == 3'd3)
-                    begin
-                        data_out_0 <= buffer[w_idx + WIDTH * 3];
-                        data_out_1 <= buffer[w_idx + 1 + WIDTH * 3];
-                        data_out_2 <= buffer[w_idx + 2 + WIDTH * 3];
-                        data_out_3 <= buffer[w_idx + 3 + WIDTH * 3];
-                        data_out_4 <= buffer[w_idx + 4 + WIDTH * 3];
-
-                        data_out_5 <= buffer[w_idx + WIDTH * 4];
-                        data_out_6 <= buffer[w_idx + 1 + WIDTH * 4];
-                        data_out_7 <= buffer[w_idx + 2 + WIDTH * 4];
-                        data_out_8 <= buffer[w_idx + 3 + WIDTH * 4];
-                        data_out_9 <= buffer[w_idx + 4 + WIDTH * 4];
-
-                        data_out_10 <= buffer[w_idx];
-                        data_out_11 <= buffer[w_idx + 1];
-                        data_out_12 <= buffer[w_idx + 2];
-                        data_out_13 <= buffer[w_idx + 3];
-                        data_out_14 <= buffer[w_idx + 4];
-
-                        data_out_15 <= buffer[w_idx + WIDTH];
-                        data_out_16 <= buffer[w_idx + 1 + WIDTH];
-                        data_out_17 <= buffer[w_idx + 2 + WIDTH];
-                        data_out_18 <= buffer[w_idx + 3 + WIDTH];
-                        data_out_19 <= buffer[w_idx + 4 + WIDTH];
-
-                        data_out_20 <= buffer[w_idx + WIDTH * 2];
-                        data_out_21 <= buffer[w_idx + 1 + WIDTH * 2];
-                        data_out_22 <= buffer[w_idx + 2 + WIDTH * 2];
-                        data_out_23 <= buffer[w_idx + 3 + WIDTH * 2];
-                        data_out_24 <= buffer[w_idx + 4 + WIDTH * 2];
-                    end
-                    else if (buf_flag == 3'd4)
-                    begin
-                        data_out_0 <= buffer[w_idx + WIDTH * 4];
-                        data_out_1 <= buffer[w_idx + 1 + WIDTH * 4];
-                        data_out_2 <= buffer[w_idx + 2 + WIDTH * 4];
-                        data_out_3 <= buffer[w_idx + 3 + WIDTH * 4];
-                        data_out_4 <= buffer[w_idx + 4 + WIDTH * 4];
-
-                        data_out_5 <= buffer[w_idx];
-                        data_out_6 <= buffer[w_idx + 1];
-                        data_out_7 <= buffer[w_idx + 2];
-                        data_out_8 <= buffer[w_idx + 3];
-                        data_out_9 <= buffer[w_idx + 4];
-
-                        data_out_10 <= buffer[w_idx + WIDTH];
-                        data_out_11 <= buffer[w_idx + 1 + WIDTH];
-                        data_out_12 <= buffer[w_idx + 2 + WIDTH];
-                        data_out_13 <= buffer[w_idx + 3 + WIDTH];
-                        data_out_14 <= buffer[w_idx + 4 + WIDTH];
-
-                        data_out_15 <= buffer[w_idx + WIDTH * 2];
-                        data_out_16 <= buffer[w_idx + 1 + WIDTH * 2];
-                        data_out_17 <= buffer[w_idx + 2 + WIDTH * 2];
-                        data_out_18 <= buffer[w_idx + 3 + WIDTH * 2];
-                        data_out_19 <= buffer[w_idx + 4 + WIDTH * 2];
-
-                        data_out_20 <= buffer[w_idx + WIDTH * 3];
-                        data_out_21 <= buffer[w_idx + 1 + WIDTH * 3];
-                        data_out_22 <= buffer[w_idx + 2 + WIDTH * 3];
-                        data_out_23 <= buffer[w_idx + 3 + WIDTH * 3];
-                        data_out_24 <= buffer[w_idx + 4 + WIDTH * 3];
-                    end
-                end
             end
         end
-     end
+    end
 
 endmodule
