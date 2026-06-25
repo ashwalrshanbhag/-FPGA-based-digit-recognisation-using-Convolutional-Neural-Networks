@@ -38,7 +38,7 @@ module axis_cnn_mnist (
         .clk(aclk),
         .rst_n(aresetn & clr),
         .valid_in(valid_in),
-        .data_in(s_axis_tdata_reg),
+        .data_in(s_axis_tdata_reg),   //    
         .conv_out_1,
         .conv_out_2,
         .conv_out_3,
