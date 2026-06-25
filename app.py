@@ -10,8 +10,8 @@ app = Flask(__name__)
 # ── Try loading FPGA overlay ──────────────────────────────────────────────────
 fpga_available = False
 try:
-    from pynq import Overlay
-    from pynq import allocate
+    from pynq import Overlay  #PYNQ grabs the compiled binary bitstream configuration file, activates the internal wiring channels, configurations, registers, 
+    from pynq import allocate  # allocate keeps all 784 together 
     overlay = Overlay("./modifieddesign_wrapper.bit")
     print("FPGA Overlay loaded!")
     print(dir(overlay))  # Print available IPs
@@ -78,8 +78,8 @@ def predict_fpga(x):
         out_buffer[:] = 0
         
         dma = overlay.axi_dma_0
-        dma.sendchannel.transfer(in_buffer)
-        dma.recvchannel.transfer(out_buffer)
+        dma.sendchannel.transfer(in_buffer)  # S_AXIS_MM2S -> Streams pixels to CNN
+        dma.recvchannel.transfer(out_buffer) # S_AXIS_S2MM -> Prepares to catch result 
         dma.sendchannel.wait()
         dma.recvchannel.wait()
         
